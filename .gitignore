@@ -13,14 +13,18 @@
 .env
 .env.*
 !.env.example
+/config/app.yaml
 
 # Python
 __pycache__/
 *.py[cod]
+*.egg-info/
 .venv/
 .pytest_cache/
 .mypy_cache/
 .ruff_cache/
+.coverage
+htmlcov/
 
 # Node
 node_modules/

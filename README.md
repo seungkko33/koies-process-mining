@@ -121,3 +121,69 @@
 - PM4Py repository/license: https://github.com/process-intelligence-solutions/pm4py
 - OpenAI Codex AGENTS.md 안내: https://openai.com/index/introducing-codex/
 - OpenAI Harness Engineering: https://openai.com/index/harness-engineering/
+
+## 8. Phase 0/1 skeleton 실행
+
+현재 skeleton은 합성 데이터만 사용하며 다음 vertical slice를 제공한다.
+
+```text
+합성 Event Log → DuckDB DFG/Overview → FastAPI → React Overview
+```
+
+### Backend 설치 및 실행 (PowerShell)
+
+저장소 루트에서 실행한다.
+
+```powershell
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
+python -m pip install -e ".[dev]"
+uvicorn app.main:app --reload --host 127.0.0.1 --port 8000
+```
+
+- Health: `http://127.0.0.1:8000/health`
+- Overview: `http://127.0.0.1:8000/api/overview`
+- API 문서: `http://127.0.0.1:8000/docs`
+
+기본 설정은 `config/app.example.yaml`에서 읽는다. 로컬 설정 파일을 사용하려면
+`config/app.yaml`을 만들고 다음 환경 변수를 지정한다. `config/app.yaml`은 Git에서 제외된다.
+
+```powershell
+$env:PROCESS_MINING_CONFIG = "config/app.yaml"
+```
+
+### 합성 Event Log 생성
+
+generator는 이벤트를 한 행씩 기록하므로 전체 결과를 Python 메모리에 적재하지 않는다. 출력은
+기본적으로 Git 제외 경로인 `data/synthetic/event_log.csv`에 저장된다.
+
+```powershell
+python scripts/generate_synthetic_events.py --cases 1000
+```
+
+### Frontend 설치 및 실행
+
+새 터미널에서 다음을 실행한다.
+
+```powershell
+cd frontend
+npm install
+npm run dev
+```
+
+브라우저에서 `http://127.0.0.1:5173`을 열면 Vite proxy를 통해 로컬 FastAPI를 조회한다.
+
+### 검증 명령
+
+```powershell
+pytest
+ruff check backend scripts
+mypy
+cd frontend
+npm run lint
+npm run typecheck
+npm run build
+```
+
+Golden fixture는 `backend/tests/fixtures/golden_event_log.json`에 있는 완전 합성 3개 case
+(`A-B-C`, `A-B-B-C`, `A-D-C`)이며, DFG 빈도·case share·전이시간 백분위와 overview를 검증한다.
