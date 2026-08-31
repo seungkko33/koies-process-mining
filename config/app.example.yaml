@@ -1,0 +1,33 @@
+app:
+  host: 127.0.0.1
+  port: 8000
+  environment: local
+
+data:
+  raw_dir: ./data/raw
+  raw_parquet_dir: ./data/parquet/raw
+  curated_dir: ./data/parquet/curated
+  quarantine_dir: ./data/quarantine
+  temp_dir: ./data/temp
+  database_path: ./db/process_mining.duckdb
+
+duckdb:
+  threads: 6
+  memory_limit: 20GB
+  preserve_insertion_order: false
+  temp_directory: ./data/temp
+analytics:
+  max_process_nodes: 100
+  max_process_edges: 300
+  max_variants: 100
+  default_case_page_size: 100
+  query_timeout_seconds: 60
+security:
+  allow_external_ai: false
+  allow_raw_export: false
+  expose_raw_params: false
+  bind_localhost_only: true
+quality:
+  max_timestamp_parse_failure_rate: 0.01
+  max_ambiguous_mapping_count: 0
+  warn_unmapped_activity_rate: 0.05
