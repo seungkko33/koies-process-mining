@@ -24,6 +24,7 @@ class AppConfig(BaseModel):
 class DataConfig(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
+    staging_dir: Path
     raw_dir: Path
     raw_parquet_dir: Path
     curated_dir: Path
@@ -58,6 +59,15 @@ class SecurityConfig(BaseModel):
     allow_raw_export: bool = False
     expose_raw_params: bool = False
     bind_localhost_only: bool = True
+    pseudonymization_key_env: str = "KOIES_PSEUDONYMIZATION_KEY"
+
+
+class DatasetImportConfig(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    allowed_roots: list[Path] = Field(default_factory=list)
+    allow_unc_paths: bool = False
+    default_mode: str = Field(default="COPY", pattern=r"^(COPY|REFERENCE)$")
 
 
 class QualityConfig(BaseModel):
@@ -66,6 +76,10 @@ class QualityConfig(BaseModel):
     max_timestamp_parse_failure_rate: float = Field(default=0.01, ge=0, le=1)
     max_ambiguous_mapping_count: int = Field(default=0, ge=0)
     warn_unmapped_activity_rate: float = Field(default=0.05, ge=0, le=1)
+    max_preview_rows: int = Field(default=200, ge=1, le=1_000)
+    upload_chunk_size_bytes: int = Field(default=1_048_576, ge=65_536, le=67_108_864)
+    minimum_free_space_multiplier: float = Field(default=2.5, ge=1.0, le=10.0)
+    large_case_event_threshold: int = Field(default=10_000, ge=2)
 
 
 class Settings(BaseModel):
@@ -76,6 +90,7 @@ class Settings(BaseModel):
     duckdb: DuckDBConfig
     analytics: AnalyticsConfig
     security: SecurityConfig
+    dataset_import: DatasetImportConfig = Field(default_factory=DatasetImportConfig)
     quality: QualityConfig
 
     @model_validator(mode="after")
@@ -101,7 +116,16 @@ def _resolve_data_paths(settings: Settings, base_dir: Path) -> Settings:
             "temp_directory": _resolve_path(settings.duckdb.temp_directory, base_dir),
         }
     )
-    return settings.model_copy(update={"data": data, "duckdb": duckdb})
+    dataset_import = settings.dataset_import.model_copy(
+        update={
+            "allowed_roots": [
+                _resolve_path(root, base_dir) for root in settings.dataset_import.allowed_roots
+            ]
+        }
+    )
+    return settings.model_copy(
+        update={"data": data, "duckdb": duckdb, "dataset_import": dataset_import}
+    )
 
 
 def load_settings(config_path: Path | str | None = None) -> Settings:

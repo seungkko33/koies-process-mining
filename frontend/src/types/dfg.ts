@@ -29,6 +29,14 @@ export interface DFGQueryMeta {
   rows: number;
   filter_signature: string;
   mapping_version: string;
+  dataset_id: string | null;
+  semantic_contract_version: string | null;
+  activity_mapping_version: string | null;
+  normalization_version: string | null;
+  activity_level: "source" | "business";
+  unique_source_activities: number | null;
+  business_activities: number | null;
+  event_mapping_coverage: number | null;
 }
 
 export interface DFGResponse {
@@ -36,4 +44,3 @@ export interface DFGResponse {
   meta: DFGQueryMeta;
   warnings: string[];
 }
-

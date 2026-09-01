@@ -4,6 +4,7 @@ app:
   environment: local
 
 data:
+  staging_dir: ./data/staging
   raw_dir: ./data/raw
   raw_parquet_dir: ./data/parquet/raw
   curated_dir: ./data/parquet/curated
@@ -27,7 +28,16 @@ security:
   allow_raw_export: false
   expose_raw_params: false
   bind_localhost_only: true
+  pseudonymization_key_env: KOIES_PSEUDONYMIZATION_KEY
+dataset_import:
+  allowed_roots: []
+  allow_unc_paths: false
+  default_mode: COPY
 quality:
   max_timestamp_parse_failure_rate: 0.01
   max_ambiguous_mapping_count: 0
   warn_unmapped_activity_rate: 0.05
+  max_preview_rows: 200
+  upload_chunk_size_bytes: 1048576
+  minimum_free_space_multiplier: 2.5
+  large_case_event_threshold: 10000

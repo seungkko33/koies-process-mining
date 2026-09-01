@@ -205,3 +205,67 @@ curated/process_domain=CLAIM/year=2026/month=08/*.parquet
 
 ## 13. 데이터 보존
 Raw, curated, aggregate의 보존기간을 분리한다. MVP에서는 삭제를 자동화하지 말고 정책 확정 후 구현한다.
+
+## 14. Dataset manifest와 lifecycle metadata
+
+DuckDB `meta` schema에는 다음 계약을 저장한다.
+
+- `meta.dataset`: UUID, 표시용 원본 파일명, 고정 staged 파일명, file type/size, streaming SHA-256,
+  row/column count, status, schema/mapping/normalization version, 산출물 상대 경로/크기, error code
+- `meta.dataset_column_profile`: ordinal/name/inferred type, observed null count, approximate distinct,
+  lexical min/max, 최대 3개 bounded sample
+- `meta.mapping_definition`: Dataset별 append-only mapping version, 필수/선택 column, timestamp format,
+  timezone, 생성 시각
+- `meta.dataset_quality_report`: mapping version별 technical validation 수치와 outcome
+
+원본 파일명은 표시용 metadata이며 경로 결정에 사용하지 않는다. `source_type`은 현재
+`UPLOADED_FILE`만 사용한다. application version manifest와 과거 mapping version 선택 UI는 후속
+확장점이다.
+
+## 15. Data Quality metric 정의
+
+- `total_rows`: validation input row 수
+- `valid_events`: 모든 필수값이 있고 timestamp parse에 성공하며 duplicate로 의심되지 않은 row
+- `invalid_events`: `total_rows - valid_events`
+- `unique_cases`, `unique_activities`: valid event에서 trim 후 distinct
+- `null_*`: SQL NULL인 row 수
+- `empty_case_id`, `empty_activity`: NULL이 아니면서 trim 후 빈 문자열인 row 수
+- `invalid_timestamp`: NULL/빈 문자열이 아니지만 지정 format 또는 TIMESTAMP cast에 실패한 row 수
+- `duplicate_events`: event_id가 있으면 동일 event_id, 없으면 case/activity/parsed timestamp composite가
+  둘 이상인 그룹의 모든 row 수
+- `duplicate_timestamp_rows`: 유효 case 안에서 동일 parsed timestamp가 둘 이상인 row 수. 관측 KPI이며
+  source sequence가 있을 수 있으므로 이것만으로 격리하지 않는다.
+- `single_event_cases`: validation을 통과한 event가 1개뿐인 case 수
+
+quarantine schema는 `source_row_number`, pipe-delimited `failure_code`, generic `failure_reason`,
+`dataset_id`, `mapping_version`만 보존한다. 원본 column value를 복제하지 않는다.
+
+## 16. Mapping과 normalized artifact version
+
+Mapping version N은 `events-vN.parquet`, `quarantine-vN.parquet`을 생성한다. canonical row에는
+`mapping-vN`, `case-column-vN`, Dataset UUID ingestion batch를 기록한다. 새 mapping은 staged source를
+덮어쓰지 않으며 Dataset 전체 삭제 전까지 이전 version artifact를 자동 삭제하지 않는다.
+
+## 17. Semantic Contract
+
+`meta.semantic_contract`의 grain은 Dataset × contract version이다. mapping version을 참조하고 case null/empty
+policy, HMAC 여부, PII classification, source/display/normalized timezone, ordering fields, optional attribute
+retention과 activity mapping provenance를 JSON/typed scalar로 보존한다. 새 version은 이전 version을
+`SUPERSEDED`로 만들지만 수정하거나 삭제하지 않는다.
+
+## 18. Activity mapping과 artifact
+
+- `meta.activity_mapping_set`: Dataset × mapping version, unmapped policy와 status
+- `meta.activity_mapping_entry`: mapping set × exact source activity, business activity, enabled
+- `meta.dataset_artifact`: artifact 한 개가 한 row이며 type/storage/path/size/contract/mapping/active/pinned을 기록
+
+SOURCE artifact는 Dataset 삭제에서만 제거한다. NORMALIZED/QUARANTINE은 type별 active 한 개를 유지하며
+과거 inactive artifact는 명시적 cleanup 대상이다. pinned 또는 active row는 개별 삭제할 수 없다.
+
+## 19. Quality metric grain과 denominator
+
+quality report grain은 Dataset × mapping version이다. event rate의 denominator는 validation source row,
+activity mapping event coverage의 denominator는 valid canonical event, activity coverage의 denominator는
+unique source activity다. `duplicate_timestamp_rows`는 event 수, `ambiguous_ordering_cases`는 case 수다.
+events-per-case min/median/p90/max와 large-case count는 valid case event count에서 계산한다. technical outcome과
+semantic warning을 분리하고 임의의 business threshold는 만들지 않는다.

@@ -34,3 +34,15 @@ this repository. The following notice is retained from the installed `cytoscape@
 | Package | Version | License | Purpose | Distribution impact | Decision |
 |---|---:|---|---|---|---|
 | Vitest (`vitest`) | 4.1.11 | MIT | Frontend DTO and graph-adapter unit tests | Development/test only; not imported by production source | Approved |
+
+## Backend runtime dependency
+
+| Package | Version | License | Purpose | Distribution impact | Decision |
+|---|---:|---|---|---|---|
+| Python-Multipart (`python-multipart`) | 0.0.32 | Apache-2.0 | Streaming multipart parsing for local browser file uploads | Included in the backend runtime environment; retain Apache-2.0 license terms | Approved; required by FastAPI `UploadFile` |
+
+## 이번 Phase dependency 결정
+
+새 runtime/development package를 추가하지 않았다. timezone/DST는 기존 DuckDB 1.5.5에 포함된 ICU timezone
+기능을 사용하고, HMAC-SHA256은 Python standard library로 pad를 만들고 기존 DuckDB `sha256`/BLOB SQL로
+vectorize한다. community crypto extension, `pytz`, PM4Py, background queue dependency는 추가하지 않았다.

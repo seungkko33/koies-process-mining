@@ -58,6 +58,14 @@ class QueryMeta(BaseModel):
     rows: int
     filter_signature: str
     mapping_version: str
+    dataset_id: str | None = None
+    semantic_contract_version: str | None = None
+    activity_mapping_version: str | None = None
+    normalization_version: str | None = None
+    activity_level: str = "source"
+    unique_source_activities: int | None = None
+    business_activities: int | None = None
+    event_mapping_coverage: float | None = None
 
 
 class OverviewEnvelope(BaseModel):

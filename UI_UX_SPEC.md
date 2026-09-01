@@ -163,3 +163,38 @@ Timeline:
 - 긴 activity 이름 tooltip
 - graph legend 제공
 - 모든 주요 결과를 table로도 확인 가능하게 한다.
+
+## 15. Dataset workspace
+
+좌측 `Datasets` navigation은 `/datasets/import`와 동등한 단일 workspace를 제공한다.
+
+1. **Import**: file picker와 drag/drop, CSV/CSV.GZ/Parquet 안내, filename/size, upload progress,
+   profiling/failed 상태
+2. **Dataset List**: filename, type, size, row count, status, 생성 시각, 명시적 삭제
+3. **Profile**: inferred schema, observed null, approximate distinct, min/max, bounded sample과 최대 20행
+   table preview
+4. **Event Mapping**: case/activity/timestamp 필수 dropdown, event id 및 method/status/duration/system/
+   source sequence 선택, timestamp format/timezone, parse preview
+5. **Data Quality**: total/valid/invalid, unique case/activity, null/empty/invalid timestamp, duplicate,
+   single-event case 및 outcome
+6. **Analyze**: READY Dataset을 global selection으로 설정하고 Overview 또는 Process Map으로 이동
+
+상태는 색뿐 아니라 `UPLOADING`, `PROFILING`, `MAPPING_REQUIRED`, `VALIDATING`, `READY`, `FAILED`
+text label로 표시한다. 브라우저는 file을 parsing하지 않고 upload progress만 계산한다. profile/preview는
+bounded API 응답만 렌더링하며 20M row table이나 arbitrary raw data browser를 제공하지 않는다.
+
+## Semantic/Activity/Lifecycle workspace
+
+- Semantic Contract: source column profile, explicit case/activity/timestamp, source/display timezone, case PII/HMAC,
+  deterministic ordering 설명과 Raw/Parsed/UTC/Display preview
+- Data Quality: technical outcome과 semantic warning 분리, same timestamp events, ambiguous cases,
+  events-per-case distribution, large cases
+- Activity Mapping: frequency descending exact mapping table, search, mapped/unmapped filter, three unmapped policies,
+  activity/event coverage, append-only version select/create
+- Process Map: Source Activity/Business Activity switch와 source/business count, coverage, displayed node/edge,
+  contract/activity/normalization provenance
+- Artifacts: raw/normalized/quarantine/previous/temp/total disk usage, active/pinned 표시, 보호 상태를 반영한 cleanup
+- Local Path: 사용자가 이미 알고 있는 allowed absolute path 입력만 제공하고 directory browser는 제공하지 않음
+
+percentage를 추정하지 않는다. operation이 실행 중이면 실제 current step과 elapsed 기준 metadata만 보여준다.
+`SOURCE_CHANGED`는 READY와 다른 text/error state로 표시하고 재분석을 막는다.

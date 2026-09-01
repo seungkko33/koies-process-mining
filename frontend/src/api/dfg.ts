@@ -70,6 +70,14 @@ function parseMeta(value: unknown): DFGQueryMeta {
     rows: readNumber(value, "rows"),
     filter_signature: readString(value, "filter_signature"),
     mapping_version: readString(value, "mapping_version"),
+    dataset_id: typeof value.dataset_id === "string" ? value.dataset_id : null,
+    semantic_contract_version: typeof value.semantic_contract_version === "string" ? value.semantic_contract_version : null,
+    activity_mapping_version: typeof value.activity_mapping_version === "string" ? value.activity_mapping_version : null,
+    normalization_version: typeof value.normalization_version === "string" ? value.normalization_version : null,
+    activity_level: value.activity_level === "business" ? "business" : "source",
+    unique_source_activities: typeof value.unique_source_activities === "number" ? value.unique_source_activities : null,
+    business_activities: typeof value.business_activities === "number" ? value.business_activities : null,
+    event_mapping_coverage: typeof value.event_mapping_coverage === "number" ? value.event_mapping_coverage : null,
   };
 }
 
@@ -84,8 +92,16 @@ export function parseDFGResponse(value: unknown): DFGResponse {
   return { data: parseData(value.data), meta: parseMeta(value.meta), warnings };
 }
 
-export async function fetchDFG(signal?: AbortSignal): Promise<DFGResponse> {
-  const response = await fetch("/api/dfg", {
+export async function fetchDFG(
+  signal?: AbortSignal,
+  datasetId?: string | null,
+  activityLevel: "source" | "business" = "source",
+): Promise<DFGResponse> {
+  const parameters = new URLSearchParams();
+  if (datasetId) parameters.set("dataset_id", datasetId);
+  if (activityLevel === "business") parameters.set("activity_level", activityLevel);
+  const query = parameters.size ? `?${parameters.toString()}` : "";
+  const response = await fetch(`/api/dfg${query}`, {
     headers: { Accept: "application/json" },
     signal,
   });
@@ -94,4 +110,3 @@ export async function fetchDFG(signal?: AbortSignal): Promise<DFGResponse> {
   }
   return parseDFGResponse(await response.json());
 }
-

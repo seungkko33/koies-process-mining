@@ -60,8 +60,8 @@ Local Workstation
 목적: 원천의 의미를 보존하고 재처리 가능하게 유지한다.
 
 권장 방식:
-- 원천 DB에서 직접 장시간 분석하지 않는다.
-- 필요한 로그 범위를 export한 후 Parquet으로 변환한다.
+- 운영 DB에 직접 연결하거나 장시간 분석하지 않는다.
+- 사용자가 필요한 로그 범위를 별도 CSV/Parquet으로 내려받아 localhost Browser Upload로 등록한다.
 - 원본 파일에는 read-only 원칙 적용.
 - 원천 파일 checksum, export date, source system version 기록.
 
@@ -254,3 +254,74 @@ DuckDB를 선택했다는 이유만으로 모든 규모에서 영구 고정하�
 - ADR-003 예정: activity mapping 관리
 - ADR-004 예정: PM4Py 라이선스 및 도입 방식
 - ADR-005 예정: single-user local vs intranet multi-user
+
+## 11. File-based Dataset Ingestion architecture
+
+Primary ingestion은 운영 DB 연결이 아니라 사용자가 내려받은 로컬 파일 upload다.
+
+```mermaid
+flowchart LR
+    U[Browser CSV/CSV.GZ/Parquet] -->|multipart chunks| S[UUID Staging]
+    S -->|bound file path| DS[DuckDB Direct Scan]
+    DS --> P[Schema + Fast Profile + Bounded Preview]
+    P --> M[Versioned MappingDefinition]
+    M --> V[SQL Technical Validation]
+    V --> Q[Quarantine Parquet]
+    V --> N[Canonical ZSTD Parquet]
+    N --> A[EventSource]
+    A --> O[Existing Overview SQL]
+    A --> D[Existing DFG SQL]
+    O --> F[React Analysis UI]
+    D --> F
+```
+
+### Component boundaries
+- `DatasetStorage`: UUID path, chunk copy/checksum, signature/free-space validation, exact cleanup
+- `DatasetScanner`: DuckDB CSV/Parquet relation, schema, fast profile, preview, timestamp preview
+- `DatasetRepository`: parameterized metadata, mapping version, quality report, state transition
+- `DatasetNormalizer`: SQL validation, normalized/quarantine Parquet materialization
+- `EventSource`: 기존 internal `curated.event_log` 또는 READY Dataset Parquet 선택
+- `DatasetService/API`: orchestration 및 raw value를 포함하지 않는 오류 taxonomy
+- `DuckDBManager`: Windows embedded DB file handle 경합을 피하도록 request connection scope 직렬화
+
+상태 흐름은 `UPLOADING → STAGED → PROFILING → PROFILED → MAPPING_REQUIRED → VALIDATING →
+READY|FAILED`다. mapping 변경 시 source는 유지하고 새 version으로 다시 정규화한다. 부분 산출물은
+READY로 노출하지 않으며 Dataset 삭제는 UUID 아래 staging/curated/quarantine/temp와 metadata를
+함께 제거한다.
+
+## 12. Ingestion ADR index
+- ADR-002: Browser Upload vs Local Path Import
+- ADR-003: source → normalized Parquet
+- ADR-004: Dataset/Mapping Versioning
+
+기존의 case/activity/PM adapter ADR 번호 예정 목록은 후속 작성 시 새 번호를 배정한다.
+
+## 13. Semantic/scale architecture
+
+```text
+Browser Upload ─┐
+                ├─ Dataset Source ─ Scanner/Profile ─ Semantic Contract
+Allowed Path ───┘                                  │
+                                                   ├─ Validate/Quality
+                                                   ├─ atomic Normalized Parquet
+                                                   └─ Quarantine
+                                                            │
+Source EventSource ──────────────────────────────────────────┤
+Business EventSource ─ exact ActivityMappingSet join ────────┘ → Overview/DFG/UI
+```
+
+`SemanticContract`는 MappingDefinition의 상위 versioned aggregate이며 기존 mapping/API를 제거하지 않는다.
+canonical `event_ts`는 UTC `TIMESTAMP`로 materialize하고 source/display timezone은 contract와 row metadata에
+남긴다. DFG provenance는 dataset, contract, activity mapping, normalization version을 반환한다.
+
+Local Import의 COPY/REFERENCE는 scanner 이후 같은 pipeline을 공유한다. REFERENCE manifest는 checksum,
+size, mtime을 보관하고 분석 전 drift를 검증한다. normalized/quarantine은 같은 volume의 temporary file에
+쓴 뒤 Windows `Path.replace`로 finalize하며 normalized canonical file을 마지막에 교체한다.
+
+요청 connection 직렬화는 Windows embedded DuckDB handle 안정성을 위한 현재 single-user 제약이다.
+5M application processing 측정 결과가 별도 worker의 필요성을 입증하기 전까지 synchronous request와
+실제 current step/elapsed metadata를 유지한다. 향후에는 read-only analytics connection과 단일 local worker를
+우선 검토하며 Redis/Celery 같은 distributed component는 도입하지 않는다.
+
+ADR index: ADR-005 Semantic Contract, ADR-006 timezone normalization, ADR-007 activity mapping,
+ADR-008 artifact retention, ADR-009 large local import.

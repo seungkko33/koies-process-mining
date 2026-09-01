@@ -1,7 +1,11 @@
 import type { OverviewResponse } from "../types/overview";
 
-export async function fetchOverview(signal?: AbortSignal): Promise<OverviewResponse> {
-  const response = await fetch("/api/overview", {
+export async function fetchOverview(
+  signal?: AbortSignal,
+  datasetId?: string | null,
+): Promise<OverviewResponse> {
+  const query = datasetId ? `?dataset_id=${encodeURIComponent(datasetId)}` : "";
+  const response = await fetch(`/api/overview${query}`, {
     headers: { Accept: "application/json" },
     signal,
   });
@@ -12,4 +16,3 @@ export async function fetchOverview(signal?: AbortSignal): Promise<OverviewRespo
 
   return (await response.json()) as OverviewResponse;
 }
-

@@ -135,3 +135,42 @@ MVP 필수 범위가 아니다.
 - 필터로 case 일부 event만 잘릴 때 throughput 정의가 왜곡될 수 있음
 - timestamp timezone/clock skew를 품질 체크
 - batch log는 일반 사용자 업무와 별도 process domain으로 분리 고려
+
+## 18. Uploaded Dataset 분석 입력 계약
+
+기존 지표 정의는 바뀌지 않는다. Dataset 기반 Overview/DFG는 다음 조건을 만족할 때만 실행한다.
+
+1. Dataset 상태가 `READY`다.
+2. 현재 mapping version의 normalized Parquet이 존재한다.
+3. technical validation을 통과한 row만 canonical Event Log에 포함한다.
+4. 정렬은 기존 계약 `event_ts, source_sequence, ingest_sequence, event_id`를 그대로 사용한다.
+
+null/empty case 또는 activity, null/invalid timestamp, suspected duplicate event는 계산 분모에서
+제외하고 quarantine에 기록한다. 동일 timestamp 자체는 `duplicate_timestamp_rows` 품질 신호지만,
+`source_sequence`와 deterministic tie-breaker가 있으므로 단독 제외 조건이 아니다.
+
+timestamp format은 mapping version의 일부다. timezone은 의미 확정 전까지 provenance metadata로
+보존하며, MVP는 wall time을 임의 timezone으로 변환하지 않는다. 따라서 여러 timezone source의
+성능 비교는 timezone normalization 정책이 별도로 승인되기 전에는 수행하면 안 된다.
+
+## 10. Canonical timestamp contract (superseding the MVP note above)
+
+- analytical `event_ts`는 timezone-naive UTC fields를 담는 canonical DuckDB `TIMESTAMP`다.
+- aware source는 내장 offset/IANA zone을 존중하고, naive source는 explicit `source_timezone` 없이는 reject한다.
+- source local time → instant → UTC 변환과 display 변환은 DuckDB ICU/IANA timezone database로 수행한다.
+- normalized source를 다시 parse하지 않으며 Raw/Parsed/UTC/Display preview로 저장 전 의미를 확인한다.
+- raw timestamp string은 source artifact에만 남기고 normalized row에는 `source_timezone` metadata를 둔다.
+
+## 11. Deterministic ordering
+
+case 내 ordering은 `event_ts`, source `source_sequence`, source `event_id`, `source_row_number` 순이다.
+생성된 canonical event ID를 source event ID로 오인하지 않는다. source_row_number는 마지막 deterministic
+fallback일 뿐 business chronology를 의미하지 않는다. 동일 timestamp이며 sequence/source event ID가 없는
+case는 `ambiguous_ordering_cases` semantic warning으로 집계한다.
+
+## 12. Business Activity DFG
+
+Source mode는 canonical activity를 그대로 사용한다. Business mode는 선택한 exact mapping version을 SQL
+left join하고 unmapped policy를 적용한 relation을 기존 DFG에 주입한다. `KEEP_SOURCE`는 원본 activity,
+`GROUP_AS_UNMAPPED`는 `__UNMAPPED__`, `EXCLUDE`는 해당 event를 relation에서 제외한다. DFG frequency,
+case share, transition time, top limit 정의는 source mode와 동일하다.

@@ -12,23 +12,28 @@ import type { DFGResponse } from "../types/dfg";
 
 const integerFormatter = new Intl.NumberFormat("ko-KR");
 
-export function ProcessMapPage() {
+interface ProcessMapPageProps {
+  datasetId?: string | null;
+}
+
+export function ProcessMapPage({ datasetId = null }: ProcessMapPageProps) {
   const [response, setResponse] = useState<DFGResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [requestVersion, setRequestVersion] = useState(0);
   const [minimumTransitionCount, setMinimumTransitionCount] = useState(1);
   const [selection, setSelection] = useState<ProcessMapSelection | null>(null);
+  const [activityLevel, setActivityLevel] = useState<"source" | "business">("source");
 
   useEffect(() => {
     const controller = new AbortController();
-    fetchDFG(controller.signal)
+    fetchDFG(controller.signal, datasetId, activityLevel)
       .then(setResponse)
       .catch((requestError: unknown) => {
         if (requestError instanceof DOMException && requestError.name === "AbortError") return;
         setError(requestError instanceof Error ? requestError.message : "알 수 없는 오류입니다.");
       });
     return () => controller.abort();
-  }, [requestVersion]);
+  }, [activityLevel, datasetId, requestVersion]);
 
   const maximumTransitionCount = useMemo(
     () => Math.max(1, ...(response?.data.edges.map((edge) => edge.transition_count) ?? [])),
@@ -86,6 +91,8 @@ export function ProcessMapPage() {
       </div>
 
       <div className="process-controls">
+        <label htmlFor="activity-level">Activity level</label>
+        <select id="activity-level" value={activityLevel} disabled={!datasetId} onChange={(event) => { setActivityLevel(event.target.value as "source" | "business"); setSelection(null); }}><option value="source">Source Activity</option><option value="business">Business Activity</option></select>
         <label htmlFor="minimum-transition-count">
           Minimum transition frequency
           <strong>{integerFormatter.format(minimumTransitionCount)}</strong>
@@ -101,6 +108,15 @@ export function ProcessMapPage() {
             setSelection(null);
           }}
         />
+      </div>
+
+      <div className="process-summary provenance-summary">
+        <span>Level <strong>{response.meta.activity_level}</strong></span>
+        {response.meta.unique_source_activities !== null ? <span>Source activities <strong>{response.meta.unique_source_activities}</strong></span> : null}
+        {response.meta.business_activities !== null ? <span>Business activities <strong>{response.meta.business_activities}</strong></span> : null}
+        {response.meta.event_mapping_coverage !== null ? <span>Coverage <strong>{(response.meta.event_mapping_coverage * 100).toFixed(1)}%</strong></span> : null}
+        <span>{response.meta.semantic_contract_version ?? "default contract"}</span>
+        <span>{response.meta.activity_mapping_version ?? "source activity"}</span>
       </div>
 
       {response.warnings.length > 0 ? (

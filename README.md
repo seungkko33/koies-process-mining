@@ -57,7 +57,7 @@
 - 100만~500만 건 샘플 벤치마크
 
 ### Phase 1 — 데이터 엔진
-- CSV/DB export → Parquet 변환
+- 사용자가 내려받은 CSV/Parquet → localhost upload → normalized Parquet 변환
 - 정규화 이벤트 로그 생성
 - DuckDB 기반 지표 집계
 - 품질검증 리포트
@@ -206,3 +206,98 @@ npm run build
 
 Golden fixture는 `backend/tests/fixtures/golden_event_log.json`에 있는 완전 합성 3개 case
 (`A-B-C`, `A-B-B-C`, `A-D-C`)이며, DFG 빈도·case share·전이시간 백분위와 overview를 검증한다.
+
+## 9. Local File Ingestion vertical slice
+
+현재 primary ingestion은 운영 DB 연결이 아니라 **사용자가 내려받은 로컬 CSV/CSV.GZ/Parquet의
+Browser Upload**다. 모든 처리는 localhost 안에서 끝나며 실제 Dataset을 외부 서비스로 전송하지
+않는다.
+
+```text
+Local file → chunked staging → DuckDB direct scan → fast profile/preview
+→ versioned Event Log mapping → validation/quarantine → normalized Parquet
+→ dataset-aware Overview/DFG/Process Map
+```
+
+Frontend의 `Datasets` 메뉴에서 upload, profile, 최대 200행 preview, case/activity/timestamp mapping,
+timestamp parse preview, data-quality 확인과 READY Dataset 분석 이동을 한 workspace에서 수행한다.
+API의 핵심 경로는 다음과 같다.
+
+- `POST /api/datasets/upload`
+- `GET /api/datasets`, `GET /api/datasets/{dataset_id}/profile`
+- `GET /api/datasets/{dataset_id}/preview?limit=100` (서버 최대 200)
+- `POST /api/datasets/{dataset_id}/mappings`
+- `POST /api/datasets/{dataset_id}/normalize`
+- `GET /api/datasets/{dataset_id}/quality`
+- `DELETE /api/datasets/{dataset_id}`
+- `GET /api/overview?dataset_id=...`, `GET /api/dfg?dataset_id=...`
+
+업로드는 1 MiB chunk로 UUID staging 디렉터리에 복사하며 SHA-256을 streaming 계산한다. DuckDB의
+CSV/Parquet scan과 SQL/COPY가 profile, validation, ZSTD Parquet 정규화를 수행하므로 전체 row를
+Pandas, Python list 또는 JSON으로 만들지 않는다. 원본은 immutable이며 새 mapping은 `events-vN`
+산출물을 만든다. 잘못된 행은 원본 값을 복제하지 않고 source row number와 technical failure code만
+quarantine에 남긴다. 유효 행이 하나 이상이면 일부 격리가 있어도 `READY`, 유효 행이 없으면
+`FAILED_NO_VALID_EVENTS` 정책을 사용한다.
+
+대용량 source는 원래 다운로드 파일, staging copy, normalized/quarantine Parquet 및 DuckDB spill이
+동시에 필요하다. 알려진 upload 크기에 대해 staging 볼륨 여유 공간을 source 크기의 2.5배 이상으로
+사전 확인하지만, 운영자는 실제 column 폭과 spill을 고려해 더 큰 여유를 확보해야 한다.
+
+### Ingestion benchmark
+
+```powershell
+$env:PYTHONPATH = "backend"
+python -m scripts.benchmark_ingestion --events 100000
+python -m scripts.benchmark_ingestion --events 1000000
+# 장시간 수동 실행만 허용
+python -m scripts.benchmark_ingestion --events 5000000 --work-dir data/benchmarks/5m
+python -m scripts.benchmark_ingestion --events 20000000 --work-dir data/benchmarks/20m
+```
+
+`--work-dir`을 생략하면 모든 benchmark artifact는 종료 후 제거된다. `tracemalloc` 수치는 Python
+allocation만 측정하며 DuckDB native memory는 포함하지 않는다. 2026-09-01 개발 PC 측정:
+
+| events | staging | profile | validation | normalization | DFG | total (generation 포함) | source | normalized | Python peak |
+|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| 100,000 | 0.122s | 0.677s | 0.416s | 0.165s | 0.156s | 4.550s | 12,597,940 B | 1,170,818 B | 2,384,189 B |
+| 1,000,000 | 0.388s | 0.919s | 2.483s | 0.548s | 0.801s | 45.918s | 126,978,863 B | 12,768,747 B | 2,385,887 B |
+
+환경별 결과가 달라지므로 이 값은 제품 보장이 아닌 개발 baseline이다. 5M/20M은 실행하지 않았다.
+결정 근거는 `docs/ADR-002-browser-upload-vs-local-path-import.md`,
+`docs/ADR-003-normalized-parquet.md`, `docs/ADR-004-dataset-versioning.md`에 기록한다.
+
+## Semantic Contract와 업무 활동 분석 흐름
+
+1. 백엔드와 프런트엔드를 실행한다.
+2. 브라우저 업로드 또는 허용 root 아래의 Local Path Import로 Dataset을 등록한다.
+3. schema/profile과 bounded preview를 확인한다.
+4. case/activity/timestamp, source/display timezone, ordering, PII/retention을 Semantic Contract로 저장한다.
+5. Raw/Parsed/UTC/Display timestamp preview와 Data Quality를 확인한다.
+6. Normalize를 실행해 canonical UTC Parquet을 만든다.
+7. exact Method → Business Activity mapping version을 만들고 coverage를 확인한다.
+8. Overview와 Process Map에서 Source Activity/Business Activity를 전환한다.
+9. Artifacts에서 active/pinned 상태와 disk usage를 확인하고 과거 inactive version만 명시적으로 정리한다.
+
+Local Path Import는 `config/app.yaml`의 `dataset_import.allowed_roots`가 비어 있으면 비활성화된다.
+`COPY`는 재현성과 원본 변경 격리를 우선하는 기본값이고, `REFERENCE`는 checksum/size/mtime을
+매 작업 전에 검증하는 low-copy 방식이다. 임의 파일 탐색 API는 제공하지 않는다.
+
+case ID HMAC을 활성화하려면 repository 밖의 local secret source에
+`KOIES_PSEUDONYMIZATION_KEY`를 설정한다. 설정명은 `security.pseudonymization_key_env`로 변경할
+수 있으나 secret 값 자체는 YAML, `.env` 예시, DB metadata, Git에 저장하지 않는다.
+
+## Scale benchmark
+
+```powershell
+# 5M: source가 있으면 재사용하고 generation/application 시간을 분리한다.
+.\.venv\Scripts\python.exe scripts\benchmark_ingestion.py `
+  --events 5000000 --work-dir data/benchmarks --reuse-source
+
+# 20M: preflight를 검토한 명시적 확인 없이는 실행되지 않는다.
+.\.venv\Scripts\python.exe scripts\benchmark_ingestion.py `
+  --events 20000000 --work-dir data/benchmarks --reuse-source --confirm-large-run
+```
+
+결과는 기본적으로 ignored local path인 `data/benchmarks/benchmark-results/*.json`에 저장된다.
+`source_generation_seconds`, `application_processing_seconds`, `overall_seconds`를 별도로 보며,
+application total은 staging/import부터 DFG까지의 wall-clock 시간이다. 5M/20M은 CI에서 실행하지 않는다.

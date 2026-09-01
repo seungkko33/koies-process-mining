@@ -3,20 +3,23 @@ from __future__ import annotations
 from duckdb import DuckDBPyConnection
 
 from app.analytics.filters import build_event_filter
+from app.analytics.source import EventSource
 from app.schemas.analytics import EventFilters, OverviewResult
 
 
 def calculate_overview(
     connection: DuckDBPyConnection,
     filters: EventFilters | None = None,
+    source: EventSource | None = None,
 ) -> OverviewResult:
     active_filters = filters or EventFilters()
+    active_source = source or EventSource.default_table()
     where_clause, parameters = build_event_filter(active_filters)
     row = connection.execute(
         f"""
         WITH filtered_events AS (
             SELECT case_id, activity, event_ts
-            FROM curated.event_log
+            FROM {active_source.relation_sql}
             WHERE {where_clause}
         ),
         case_summary AS (
@@ -49,7 +52,7 @@ def calculate_overview(
             ) AS rework_rate
         FROM filtered_events
         """,
-        parameters,
+        [*active_source.parameters, *parameters],
     ).fetchone()
     if row is None:
         raise RuntimeError("Overview query returned no row")
@@ -62,4 +65,3 @@ def calculate_overview(
         p90_throughput_ms=row[4],
         rework_rate=row[5],
     )
-

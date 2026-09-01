@@ -16,20 +16,24 @@ function formatRate(value: number): string {
   return value.toLocaleString("ko-KR", { style: "percent", maximumFractionDigits: 1 });
 }
 
-export function OverviewPage() {
+interface OverviewPageProps {
+  datasetId?: string | null;
+}
+
+export function OverviewPage({ datasetId = null }: OverviewPageProps) {
   const [overview, setOverview] = useState<OverviewResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     const controller = new AbortController();
-    fetchOverview(controller.signal)
+    fetchOverview(controller.signal, datasetId)
       .then(setOverview)
       .catch((requestError: unknown) => {
         if (requestError instanceof DOMException && requestError.name === "AbortError") return;
         setError(requestError instanceof Error ? requestError.message : "알 수 없는 오류입니다.");
       });
     return () => controller.abort();
-  }, []);
+  }, [datasetId]);
 
   if (error) {
     return <section className="state-panel error">{error}</section>;
@@ -69,4 +73,3 @@ export function OverviewPage() {
     </section>
   );
 }
-

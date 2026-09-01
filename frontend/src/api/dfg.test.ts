@@ -24,7 +24,20 @@ const validResponse = {
       },
     ],
   },
-  meta: { query_ms: 2, rows: 3, filter_signature: "all", mapping_version: "all" },
+  meta: {
+    query_ms: 2,
+    rows: 3,
+    filter_signature: "all",
+    mapping_version: "all",
+    dataset_id: null,
+    semantic_contract_version: null,
+    activity_mapping_version: null,
+    normalization_version: null,
+    activity_level: "source",
+    unique_source_activities: null,
+    business_activities: null,
+    event_mapping_coverage: null,
+  },
   warnings: [],
 };
 
@@ -48,4 +61,3 @@ describe("parseDFGResponse", () => {
     );
   });
 });
-

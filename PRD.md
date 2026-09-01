@@ -128,7 +128,7 @@ case 미매핑, activity 미매핑, timestamp 오류를 사용자에게 명확�
 # 4. 핵심 사용자 여정
 
 ## Journey A — 데이터 준비
-1. 사용자가 export된 로그 파일 위치를 지정한다.
+1. 사용자가 공제정보망에서 내려받은 CSV/Parquet 파일을 localhost UI에서 업로드한다.
 2. 시스템이 schema와 row count를 검사한다.
 3. timestamp parsing 및 민감 필드 후보를 탐지한다.
 4. 사용자가 process domain과 case rule을 선택한다.
@@ -166,12 +166,13 @@ case 미매핑, activity 미매핑, timestamp 오류를 사용자에게 명확�
 
 ## FR-DATA-001 원천 파일 등록
 시스템은 최소 CSV와 Parquet 입력을 지원해야 한다.
-선택 확장: DB export connector.
+Primary 방식은 사용자가 다운로드한 로컬 파일의 Browser Upload다. 선택 확장은 제한된 Local Path
+Import 또는 DB export connector이며 운영 DB 직접 연결은 MVP 범위가 아니다.
 
 Acceptance:
-- 파일 경로를 설정 가능
-- 접근 불가 시 명확한 오류
-- 파일 크기/행 수 추정 표시
+- CSV/CSV.GZ/Parquet 파일 선택과 chunked localhost upload
+- unsupported/corrupt 파일은 명확한 오류와 FAILED state 또는 안전한 사전 거부
+- 파일 크기와 scan 후 실제 행 수 표시
 - raw data 자체를 application log에 기록하지 않음
 
 ## FR-DATA-002 Schema Profiling
@@ -962,3 +963,43 @@ Raw Logs
 ```
 
 2,000만 건 규모에서 가장 큰 위험은 “DuckDB가 데이터를 못 다루는가”가 아니라 **로그를 올바른 case/activity 이벤트로 의미 변환할 수 있는가**이다. 따라서 개발 자원의 우선순위는 화려한 UI보다 Phase 0 데이터 의미 검증과 mapping 체계에 둔다.
+
+---
+
+# 26. File-based Local Ingestion 확정사항
+
+## Primary ingestion
+MVP는 운영 DB에 직접 연결하지 않는다. 사용자가 별도로 내려받은 CSV/CSV.GZ/Parquet 파일을
+localhost browser UI에 upload하는 방식이 primary path다. DB export connector와 제한된 Local Path
+Import는 미래 adapter 후보이며 현재 제품의 전제가 아니다.
+
+## 구현된 Dataset journey
+1. multipart upload를 UUID staging 경로에 chunk 저장하고 SHA-256/크기를 기록한다.
+2. DuckDB direct scan으로 schema, row count, fast profile과 bounded preview를 생성한다.
+3. 사용자가 case_id/activity/event_ts 및 선택 필드를 명시하고 versioned mapping을 저장한다.
+4. DuckDB SQL이 technical validation을 수행해 valid/quarantine을 분리한다.
+5. valid row를 canonical ZSTD Parquet으로 materialize한다.
+6. 유효 event가 있으면 Dataset을 READY로 표시하고 기존 Overview/DFG datasource로 선택한다.
+
+## Scope와 정책
+- source activity column을 canonical activity로 직접 연결하며 Method→Business Activity rule engine은
+  후속 Phase다.
+- timezone은 사용자 입력 metadata로 기록한다. 실제 timezone 의미가 확정되지 않은 상태에서 임의
+  변환하지 않는다.
+- null/empty case 또는 activity, null/invalid timestamp, suspected duplicate event는 격리한다.
+- 일부 invalid row가 있어도 valid row가 1개 이상이면 `PASSED_WITH_QUARANTINE`으로 분석 가능하다.
+- 전체 유효 row가 0이면 READY로 승격하지 않는다.
+- preview와 profile sample은 데이터 이해용으로만 제공하고 raw data browser/export로 확장하지 않는다.
+
+## Phase: Semantic Contract와 scale readiness
+
+- 기존 MappingDefinition을 유지하면서 versioned `SemanticContract`가 case policy, canonical UTC timestamp,
+  deterministic ordering, PII classification, attribute retention, 선택적 keyed HMAC을 고정한다.
+- naive timestamp는 IANA source timezone을 필수로 하며 aware timestamp의 내장 offset은 우선한다.
+- exact Method → Business Activity mapping은 append-only version과 `KEEP_SOURCE`,
+  `GROUP_AS_UNMAPPED`, `EXCLUDE` 정책을 제공한다. Source/Business DFG는 동일 API의 optional context다.
+- Dataset source, normalized, quarantine artifact의 size/active/pinned 상태를 추적한다. 자동 삭제는 하지 않는다.
+- Local Path Import는 configured allowed roots에 한정하고 COPY를 기본값으로 한다. REFERENCE는 source drift를
+  감지하면 `SOURCE_CHANGED`가 되어 기존 READY 분석을 조용히 재사용하지 않는다.
+- 5M benchmark는 source generation과 application processing을 분리한다. 20M은 명시적 확인과 disk preflight가
+  필요한 수동 작업이며 CI 범위가 아니다.

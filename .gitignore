@@ -8,6 +8,8 @@
 *.csv
 *.tsv
 *.xlsx
+!backend/tests/fixtures/*.csv
+!backend/tests/fixtures/*.parquet
 
 # secrets
 .env

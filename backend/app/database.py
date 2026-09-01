@@ -3,6 +3,7 @@ from __future__ import annotations
 from collections.abc import Iterator
 from contextlib import contextmanager
 from pathlib import Path
+from threading import Lock
 
 import duckdb
 from duckdb import DuckDBPyConnection
@@ -17,6 +18,10 @@ class DuckDBManager:
 
     def __init__(self, settings: Settings) -> None:
         self._settings = settings
+        # DuckDB is an embedded, single-node engine. Serializing request-scoped
+        # connections avoids overlapping Windows file handles while a FastAPI
+        # yield dependency is completing its cleanup.
+        self._connection_lock = Lock()
 
     def _prepare_directories(self) -> None:
         database_path = self._settings.data.database_path
@@ -37,6 +42,9 @@ class DuckDBManager:
             "SET temp_directory = ?",
             [str(self._settings.duckdb.temp_directory)],
         )
+        # Canonical analytical timestamps are stored as UTC TIMESTAMP values.
+        # Setting the session explicitly prevents host-local display/cast behavior.
+        connection.execute("SET TimeZone = 'UTC'")
         return connection
 
     def initialize(self) -> None:
@@ -46,9 +54,9 @@ class DuckDBManager:
 
     @contextmanager
     def connection(self) -> Iterator[DuckDBPyConnection]:
-        connection = self.connect()
-        try:
-            yield connection
-        finally:
-            connection.close()
-
+        with self._connection_lock:
+            connection = self.connect()
+            try:
+                yield connection
+            finally:
+                connection.close()
