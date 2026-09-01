@@ -127,7 +127,7 @@
 현재 skeleton은 합성 데이터만 사용하며 다음 vertical slice를 제공한다.
 
 ```text
-합성 Event Log → DuckDB DFG/Overview → FastAPI → React Overview
+합성 Event Log → DuckDB DFG/Overview → FastAPI → React Overview/Cytoscape Process Map
 ```
 
 ### Backend 설치 및 실행 (PowerShell)
@@ -143,6 +143,7 @@ uvicorn app.main:app --reload --host 127.0.0.1 --port 8000
 
 - Health: `http://127.0.0.1:8000/health`
 - Overview: `http://127.0.0.1:8000/api/overview`
+- DFG: `http://127.0.0.1:8000/api/dfg`
 - API 문서: `http://127.0.0.1:8000/docs`
 
 기본 설정은 `config/app.example.yaml`에서 읽는다. 로컬 설정 파일을 사용하려면
@@ -172,6 +173,23 @@ npm run dev
 ```
 
 브라우저에서 `http://127.0.0.1:5173`을 열면 Vite proxy를 통해 로컬 FastAPI를 조회한다.
+좌측 `Process Map`에서 Cytoscape.js 그래프, minimum transition frequency, node/edge 상세,
+pan/zoom, fit/reset 및 transition table을 확인할 수 있다.
+
+### DFG benchmark harness
+
+benchmark는 합성 CSV를 streaming 생성하고 DuckDB로 적재한 뒤 동일한 DFG SQL을 측정한다.
+`--events`에는 임의의 양수를 사용할 수 있으며 권장 규모는 100K, 1M, 5M, 20M이다.
+
+```powershell
+python scripts/benchmark_dfg.py --events 100000
+python scripts/benchmark_dfg.py --events 1000000 --work-dir data/benchmarks/1m
+```
+
+`--work-dir`을 생략하면 CSV와 DuckDB는 임시 디렉터리에서 실행 후 제거된다. 2026-08-31
+개발 PC의 100K smoke benchmark는 생성 5.315초, 적재 0.409초, DFG 0.175초였다.
+Python peak memory 값은 `tracemalloc` 기준으로 DuckDB native memory를 포함하지 않는다.
+1M/5M/20M은 이번 단계에서 실행하지 않았다.
 
 ### 검증 명령
 
@@ -181,6 +199,7 @@ ruff check backend scripts
 mypy
 cd frontend
 npm run lint
+npm run test
 npm run typecheck
 npm run build
 ```

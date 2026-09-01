@@ -67,6 +67,24 @@ def write_csv(output_path: Path, case_count: int, seed: int) -> int:
     return event_count
 
 
+def write_csv_for_event_target(output_path: Path, event_target: int, seed: int) -> int:
+    """Stream exactly ``event_target`` synthetic events to CSV for benchmarks."""
+    if event_target < 1:
+        raise ValueError("event_target must be at least 1")
+
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    event_count = 0
+    with output_path.open("w", encoding="utf-8", newline="") as output_file:
+        writer = csv.DictWriter(output_file, fieldnames=FIELD_NAMES)
+        writer.writeheader()
+        for event in generate_events(case_count=event_target, seed=seed):
+            writer.writerow(event)
+            event_count += 1
+            if event_count == event_target:
+                break
+    return event_count
+
+
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Generate a fully synthetic event log.")
     parser.add_argument("--cases", type=int, default=1_000)
@@ -87,4 +105,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-

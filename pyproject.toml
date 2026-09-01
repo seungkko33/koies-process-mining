@@ -43,5 +43,8 @@ select = ["E", "F", "I", "UP", "B", "SIM"]
 [tool.mypy]
 python_version = "3.12"
 strict = true
-files = ["backend/app", "scripts/generate_synthetic_events.py"]
-
+files = [
+    "backend/app",
+    "scripts/generate_synthetic_events.py",
+    "scripts/benchmark_dfg.py",
+]

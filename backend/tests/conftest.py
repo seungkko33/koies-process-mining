@@ -63,3 +63,12 @@ def golden_connection() -> Iterator[DuckDBPyConnection]:
     finally:
         connection.close()
 
+
+@pytest.fixture
+def empty_connection() -> Iterator[DuckDBPyConnection]:
+    connection = duckdb.connect(":memory:")
+    connection.execute(SCHEMA_PATH.read_text(encoding="utf-8"))
+    try:
+        yield connection
+    finally:
+        connection.close()

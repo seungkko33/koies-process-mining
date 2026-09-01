@@ -10,6 +10,10 @@ def test_calculate_dfg_matches_golden_fixture(
     nodes = {node.activity: node for node in result.nodes}
     edges = {(edge.source, edge.target): edge for edge in result.edges}
 
+    assert result.total_cases == 3
+    assert result.total_events == 10
+    assert result.node_count == 4
+    assert result.edge_count == 5
     assert nodes["A"].event_count == 3
     assert nodes["B"].event_count == 3
     assert nodes["B"].case_count == 2
@@ -47,3 +51,43 @@ def test_calculate_dfg_uses_sequence_tie_breaker(
     assert ("X", "Y") in edges
     assert ("Y", "X") not in edges
 
+
+def test_calculate_dfg_is_deterministically_ordered(
+    golden_connection: DuckDBPyConnection,
+) -> None:
+    first = calculate_dfg(golden_connection)
+    second = calculate_dfg(golden_connection)
+
+    assert first == second
+    assert [node.activity for node in first.nodes] == ["A", "B", "C", "D"]
+    assert [(edge.source, edge.target) for edge in first.edges] == [
+        ("A", "B"),
+        ("B", "C"),
+        ("A", "D"),
+        ("B", "B"),
+        ("D", "C"),
+    ]
+
+
+def test_calculate_dfg_handles_empty_event_log(
+    empty_connection: DuckDBPyConnection,
+) -> None:
+    result = calculate_dfg(empty_connection)
+
+    assert result.total_cases == 0
+    assert result.total_events == 0
+    assert result.node_count == 0
+    assert result.edge_count == 0
+    assert result.nodes == []
+    assert result.edges == []
+
+
+def test_calculate_dfg_applies_bounded_graph_limits(
+    golden_connection: DuckDBPyConnection,
+) -> None:
+    result = calculate_dfg(golden_connection, max_nodes=2, max_edges=1)
+
+    assert [node.activity for node in result.nodes] == ["A", "B"]
+    assert [(edge.source, edge.target) for edge in result.edges] == [("A", "B")]
+    assert result.node_count == 2
+    assert result.edge_count == 1

@@ -36,6 +36,10 @@ class DFGEdge(BaseModel):
 
 
 class DFGResult(BaseModel):
+    total_cases: int
+    total_events: int
+    node_count: int
+    edge_count: int
     nodes: list[DFGNode] = Field(default_factory=list)
     edges: list[DFGEdge] = Field(default_factory=list)
 
@@ -62,7 +66,12 @@ class OverviewEnvelope(BaseModel):
     warnings: list[str] = Field(default_factory=list)
 
 
+class DFGEnvelope(BaseModel):
+    data: DFGResult
+    meta: QueryMeta
+    warnings: list[str] = Field(default_factory=list)
+
+
 class HealthResponse(BaseModel):
     status: str
     service: str
-

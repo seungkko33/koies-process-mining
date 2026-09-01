@@ -55,12 +55,17 @@ button {
   background: transparent;
   text-align: left;
   font-size: 14px;
-  cursor: default;
+  cursor: pointer;
 }
 
 .nav-item.active {
   color: #ffffff;
   background: #243455;
+}
+
+.nav-item:disabled {
+  color: #71809b;
+  cursor: not-allowed;
 }
 
 .content-shell {
@@ -158,6 +163,225 @@ main {
   color: #9f2f2f;
 }
 
+.state-panel p {
+  margin-top: 0;
+}
+
+.state-panel button,
+.graph-toolbar button {
+  padding: 8px 12px;
+  border: 1px solid #c6cfdd;
+  border-radius: 5px;
+  color: #27344b;
+  background: #ffffff;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.process-map-page {
+  max-width: 1320px;
+}
+
+.process-summary {
+  margin-bottom: 24px;
+  padding: 14px 0;
+  border-top: 1px solid #cfd6e2;
+  border-bottom: 1px solid #cfd6e2;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px 28px;
+  color: #68758a;
+  font-size: 13px;
+}
+
+.process-summary strong {
+  margin-right: 4px;
+  color: #1c2941;
+  font-size: 16px;
+}
+
+.process-controls {
+  margin-bottom: 18px;
+  display: grid;
+  grid-template-columns: minmax(220px, 280px) minmax(220px, 520px);
+  align-items: center;
+  gap: 20px;
+}
+
+.process-controls label {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  color: #56647b;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.process-controls input {
+  width: 100%;
+  accent-color: #2f6fdf;
+}
+
+.analysis-warning {
+  margin-bottom: 16px;
+  padding: 10px 12px;
+  border-left: 3px solid #cb7a20;
+  color: #724211;
+  background: #fff7ea;
+  font-size: 12px;
+}
+
+.process-workspace {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 260px;
+  gap: 20px;
+  align-items: stretch;
+}
+
+.graph-surface {
+  min-width: 0;
+  border: 1px solid #cfd6e2;
+  background: #ffffff;
+}
+
+.graph-toolbar {
+  min-height: 48px;
+  padding: 8px 12px;
+  border-bottom: 1px solid #e1e6ee;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.process-graph {
+  width: 100%;
+  height: 540px;
+}
+
+.graph-empty-note {
+  margin: -46px 20px 20px;
+  position: relative;
+  color: #68758a;
+  font-size: 12px;
+  text-align: center;
+}
+
+.process-details {
+  min-height: 590px;
+  padding: 24px 20px;
+  border-top: 3px solid #2f6fdf;
+  background: #ffffff;
+}
+
+.process-details h2 {
+  margin: 0 0 16px;
+  font-size: 18px;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+
+.process-details > p {
+  color: #68758a;
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.detail-type {
+  display: block;
+  margin-bottom: 8px;
+  color: #69778c;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.process-details dl {
+  margin: 0;
+}
+
+.process-details dl div {
+  padding: 12px 0;
+  border-bottom: 1px solid #e1e6ee;
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.process-details dt {
+  color: #6b778b;
+  font-size: 12px;
+}
+
+.process-details dd {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 700;
+  text-align: right;
+}
+
+.graph-legend {
+  padding: 12px 2px 22px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  color: #68758a;
+  font-size: 11px;
+}
+
+.graph-legend span {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.legend-node {
+  width: 13px;
+  height: 13px;
+  border-radius: 50%;
+  background: #2f6fdf;
+}
+
+.legend-edge {
+  width: 20px;
+  height: 3px;
+  background: #9aa8bd;
+}
+
+.transition-table-wrap {
+  overflow-x: auto;
+}
+
+.transition-table {
+  width: 100%;
+  border-collapse: collapse;
+  background: #ffffff;
+  font-size: 12px;
+}
+
+.transition-table caption {
+  padding: 12px 0;
+  color: #445168;
+  font-size: 13px;
+  font-weight: 700;
+  text-align: left;
+}
+
+.transition-table th,
+.transition-table td {
+  padding: 11px 12px;
+  border-bottom: 1px solid #e1e6ee;
+  text-align: left;
+}
+
+.transition-table th {
+  color: #5d6b81;
+  background: #f7f9fb;
+  font-weight: 600;
+}
+
 @media (max-width: 760px) {
   .app-shell {
     grid-template-columns: 1fr;
@@ -193,6 +417,19 @@ main {
   .metric:nth-child(even) {
     border-left: 1px solid #cfd6e2;
   }
+
+  .process-controls,
+  .process-workspace {
+    grid-template-columns: 1fr;
+  }
+
+  .process-details {
+    min-height: auto;
+  }
+
+  .process-graph {
+    height: 440px;
+  }
 }
 
 @media (max-width: 460px) {
@@ -217,4 +454,3 @@ main {
     scroll-behavior: auto !important;
   }
 }
-

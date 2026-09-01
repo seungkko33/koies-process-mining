@@ -1,16 +1,37 @@
 import type { PropsWithChildren } from "react";
 
-const navigation = ["Overview", "Process Map", "Variants", "Data Quality"];
+export type AppPage = "overview" | "process-map";
 
-export function AppShell({ children }: PropsWithChildren) {
+const navigation = [
+  { id: "overview", label: "Overview", enabled: true },
+  { id: "process-map", label: "Process Map", enabled: true },
+  { id: "variants", label: "Variants", enabled: false },
+  { id: "data-quality", label: "Data Quality", enabled: false },
+] as const;
+
+interface AppShellProps extends PropsWithChildren {
+  activePage: AppPage;
+  onNavigate: (page: AppPage) => void;
+}
+
+export function AppShell({ activePage, onNavigate, children }: AppShellProps) {
   return (
     <div className="app-shell">
       <aside className="sidebar" aria-label="주요 메뉴">
         <div className="brand">Process Mining</div>
         <nav>
-          {navigation.map((item, index) => (
-            <button className={index === 0 ? "nav-item active" : "nav-item"} key={item}>
-              {item}
+          {navigation.map((item) => (
+            <button
+              type="button"
+              className={item.id === activePage ? "nav-item active" : "nav-item"}
+              disabled={!item.enabled}
+              aria-current={item.id === activePage ? "page" : undefined}
+              key={item.id}
+              onClick={() => {
+                if (item.enabled) onNavigate(item.id);
+              }}
+            >
+              {item.label}
             </button>
           ))}
         </nav>
@@ -25,4 +46,3 @@ export function AppShell({ children }: PropsWithChildren) {
     </div>
   );
 }
-

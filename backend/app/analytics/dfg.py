@@ -9,9 +9,29 @@ from app.schemas.analytics import DFGEdge, DFGNode, DFGResult, EventFilters
 def calculate_dfg(
     connection: DuckDBPyConnection,
     filters: EventFilters | None = None,
+    max_nodes: int | None = None,
+    max_edges: int | None = None,
 ) -> DFGResult:
     active_filters = filters or EventFilters()
     where_clause, parameters = build_event_filter(active_filters)
+
+    totals_row = connection.execute(
+        f"""
+        SELECT
+            count(DISTINCT case_id) AS total_cases,
+            count(*) AS total_events
+        FROM curated.event_log
+        WHERE {where_clause}
+        """,
+        parameters,
+    ).fetchone()
+    if totals_row is None:
+        raise RuntimeError("DFG totals query returned no row")
+
+    node_limit_clause = "LIMIT ?" if max_nodes is not None else ""
+    node_parameters = [*parameters]
+    if max_nodes is not None:
+        node_parameters.append(max_nodes)
 
     node_rows = connection.execute(
         f"""
@@ -36,9 +56,18 @@ def calculate_dfg(
         CROSS JOIN totals
         GROUP BY activity
         ORDER BY event_count DESC, activity ASC
+        {node_limit_clause}
         """,
-        parameters,
+        node_parameters,
     ).fetchall()
+
+    edge_node_limit_clause = "LIMIT ?" if max_nodes is not None else ""
+    edge_limit_clause = "LIMIT ?" if max_edges is not None else ""
+    edge_parameters = [*parameters]
+    if max_nodes is not None:
+        edge_parameters.append(max_nodes)
+    if max_edges is not None:
+        edge_parameters.append(max_edges)
 
     edge_rows = connection.execute(
         f"""
@@ -56,6 +85,13 @@ def calculate_dfg(
         totals AS (
             SELECT count(DISTINCT case_id) AS total_cases
             FROM filtered_events
+        ),
+        visible_nodes AS (
+            SELECT activity
+            FROM filtered_events
+            GROUP BY activity
+            ORDER BY count(*) DESC, activity ASC
+            {edge_node_limit_clause}
         ),
         sequenced AS (
             SELECT
@@ -90,15 +126,18 @@ def calculate_dfg(
             ) AS p90_transition_ms
         FROM sequenced
         CROSS JOIN totals
-        WHERE target IS NOT NULL
+        WHERE
+            target IS NOT NULL
+            AND source IN (SELECT activity FROM visible_nodes)
+            AND target IN (SELECT activity FROM visible_nodes)
         GROUP BY source, target
         ORDER BY transition_count DESC, source ASC, target ASC
+        {edge_limit_clause}
         """,
-        parameters,
+        edge_parameters,
     ).fetchall()
 
-    return DFGResult(
-        nodes=[
+    nodes = [
             DFGNode(
                 activity=row[0],
                 event_count=row[1],
@@ -106,8 +145,8 @@ def calculate_dfg(
                 case_share=row[3],
             )
             for row in node_rows
-        ],
-        edges=[
+        ]
+    edges = [
             DFGEdge(
                 source=row[0],
                 target=row[1],
@@ -118,6 +157,12 @@ def calculate_dfg(
                 p90_transition_ms=row[6],
             )
             for row in edge_rows
-        ],
+        ]
+    return DFGResult(
+        total_cases=totals_row[0],
+        total_events=totals_row[1],
+        node_count=len(nodes),
+        edge_count=len(edges),
+        nodes=nodes,
+        edges=edges,
     )
-
