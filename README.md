@@ -189,7 +189,8 @@ python scripts/benchmark_dfg.py --events 1000000 --work-dir data/benchmarks/1m
 `--work-dir`을 생략하면 CSV와 DuckDB는 임시 디렉터리에서 실행 후 제거된다. 2026-08-31
 개발 PC의 100K smoke benchmark는 생성 5.315초, 적재 0.409초, DFG 0.175초였다.
 Python peak memory 값은 `tracemalloc` 기준으로 DuckDB native memory를 포함하지 않는다.
-1M/5M/20M은 이번 단계에서 실행하지 않았다.
+이 수치는 2026-08-31 DFG harness 단계의 기록이다. 이후 ingestion benchmark의 1M/5M 결과는
+아래 Local File Ingestion 및 Scale benchmark 절에 별도로 기록한다.
 
 ### 검증 명령
 
@@ -250,8 +251,8 @@ $env:PYTHONPATH = "backend"
 python -m scripts.benchmark_ingestion --events 100000
 python -m scripts.benchmark_ingestion --events 1000000
 # 장시간 수동 실행만 허용
-python -m scripts.benchmark_ingestion --events 5000000 --work-dir data/benchmarks/5m
-python -m scripts.benchmark_ingestion --events 20000000 --work-dir data/benchmarks/20m
+python scripts/benchmark_ingestion.py --events 5000000 --work-dir data/benchmarks --reuse-source
+python scripts/benchmark_ingestion.py --events 20000000 --work-dir data/benchmarks --reuse-source --confirm-large-run
 ```
 
 `--work-dir`을 생략하면 모든 benchmark artifact는 종료 후 제거된다. `tracemalloc` 수치는 Python
@@ -262,7 +263,8 @@ allocation만 측정하며 DuckDB native memory는 포함하지 않는다. 2026-
 | 100,000 | 0.122s | 0.677s | 0.416s | 0.165s | 0.156s | 4.550s | 12,597,940 B | 1,170,818 B | 2,384,189 B |
 | 1,000,000 | 0.388s | 0.919s | 2.483s | 0.548s | 0.801s | 45.918s | 126,978,863 B | 12,768,747 B | 2,385,887 B |
 
-환경별 결과가 달라지므로 이 값은 제품 보장이 아닌 개발 baseline이다. 5M/20M은 실행하지 않았다.
+환경별 결과가 달라지므로 이 값은 제품 보장이 아닌 개발 baseline이다. 5M은 아래 Scale benchmark에
+실측 결과를 기록했고, 20M은 안전 guard/preflight만 검증했으며 실제 실행하지 않았다.
 결정 근거는 `docs/ADR-002-browser-upload-vs-local-path-import.md`,
 `docs/ADR-003-normalized-parquet.md`, `docs/ADR-004-dataset-versioning.md`에 기록한다.
 
